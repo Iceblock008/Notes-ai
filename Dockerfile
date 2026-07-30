@@ -19,4 +19,4 @@ ENV PYTHONPATH=/app/src
 
 EXPOSE 8080
 
-CMD ["python", "-m", "notes_ai.web_app"]
+CMD ["python", "-c", "from notes_ai.web_app import run_server; run_server()"]
