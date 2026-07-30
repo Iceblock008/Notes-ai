@@ -12,9 +12,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 MODEL = "llama-3.3-70b-versatile"
+
+def get_groq_client():
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY not set")
+    return Groq(api_key=api_key)
 
 
 def extract_audio(video_url: str) -> dict:
@@ -103,7 +108,7 @@ Transcript:
 {transcript}
 """
 
-        response = groq_client.chat.completions.create(
+        response = get_groq_client().chat.completions.create(
             model=MODEL,
             messages=[
                 {"role": "system", "content": "You are a personal knowledge assistant that generates structured, useful notes from video transcripts."},
