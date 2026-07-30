@@ -1,0 +1,11 @@
+.env 
+.freebuff/ 
+__pycache__/ 
+outputs/ 
+audio/ 
+*.db 
+*.db-* 
+*.log 
+.DS_Store 
+.vscode/ 
+.idea/

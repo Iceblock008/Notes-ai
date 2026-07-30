@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+.env
+*.db
+outputs/
+audio/
+data/
+.git
+.gitignore
+*.log
+.DS_Store
+.vscode
+.idea
+*.md
+!README.md
