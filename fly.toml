@@ -8,24 +8,25 @@ primary_region = "iad"
   PORT = "8080"
   PYTHONPATH = "/app/src"
 
-[http_service]
+[[services]]
   internal_port = 8080
-  force_https = true
+  protocol = "tcp"
   auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 0
   processes = ["app"]
 
-[[vm]]
-  memory = "512mb"
-  cpu_kind = "shared"
-  cpus = 1
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
 
-[checks]
-  interval = 30
-  timeout = 300
-  grace_period = 60
-  method = "get"
-  path = "/api/health"
-  protocol = "http"
-  type = "http"
+  [[services.http_checks]]
+    interval = 30
+    timeout = 300
+    grace_period = 60
+    method = "get"
+    path = "/api/health"
+    protocol = "http"

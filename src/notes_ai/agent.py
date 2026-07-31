@@ -22,26 +22,29 @@ def get_groq_client():
     return Groq(api_key=api_key)
 
 
-def extract_audio(video_url: str) -> dict:
+def extract_audio(video_url: str, cookies_from_browser: str = None, cookies_file: str = None) -> dict:
     try:
         os.makedirs("audio", exist_ok=True)
 
-        id_result = subprocess.run(
-            [sys.executable, "-m", "yt_dlp", "--no-update", "--get-id", video_url],
-            capture_output=True, text=True
-        )
+        def run_ytdlp(args):
+            cmd = [sys.executable, "-m", "yt_dlp", "--no-update"]
+            if cookies_from_browser:
+                cmd += ["--cookies-from-browser", cookies_from_browser]
+            elif cookies_file:
+                cmd += ["--cookies", cookies_file]
+            cmd += args
+            return subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+        id_result = run_ytdlp(["--get-id", video_url])
         video_id = id_result.stdout.strip()
         if not video_id:
-            return {"status": "error", "error": "Could not extract video ID."}
+            return {"status": "error", "error": f"Could not extract video ID. {id_result.stderr}"}
 
         audio_path = f"audio/{video_id}.mp3"
 
-        subprocess.run([
-            sys.executable, "-m", "yt_dlp", "--no-update", "-x",
-            "--audio-format", "mp3",
-            "--audio-quality", "0",
-            "-o", f"audio/{video_id}.%(ext)s",
-            video_url
+        run_ytdlp([
+            "-x", "--audio-format", "mp3", "--audio-quality", "0",
+            "-o", f"audio/{video_id}.%(ext)s", video_url
         ], check=True)
 
         if not os.path.exists(audio_path):
@@ -52,8 +55,10 @@ def extract_audio(video_url: str) -> dict:
 
         return {"audio_path": audio_path, "status": "success"}
 
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": "Download timed out (120s). Check network/cookies."}
     except subprocess.CalledProcessError as e:
-        return {"status": "error", "error": f"yt-dlp failed: {str(e)}"}
+        return {"status": "error", "error": f"yt-dlp failed: {e.stderr}"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -175,8 +180,10 @@ def save_output(title: str, content_type: str, output: str, url: str) -> dict:
 
 
 def run_agent(url: str) -> str:
+    cookies_browser = os.environ.get("YTDLP_COOKIES_BROWSER")
+    cookies_file = os.environ.get("YTDLP_COOKIES_FILE")
     print("  [1/4] Downloading audio...")
-    audio_result = extract_audio(url)
+    audio_result = extract_audio(url, cookies_from_browser=cookies_browser, cookies_file=cookies_file)
     if audio_result["status"] == "error":
         return f"[ERROR] Download failed: {audio_result['error']}"
 

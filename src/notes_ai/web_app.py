@@ -6,6 +6,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
@@ -28,6 +29,14 @@ from notes_ai.database import (
 PORT = int(os.environ.get("PORT", 8080))
 
 app = FastAPI(title="Video Notes AI", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class ConnectionManager:
     def __init__(self):
@@ -110,7 +119,9 @@ def parse_notes_output(notes: str) -> tuple[str, str]:
 async def process_video_with_progress(url: str, client_id: str) -> dict:
     try:
         await manager.send_progress(client_id, 1, "Downloading audio...", "active")
-        audio_result = extract_audio(url)
+        cookies_browser = os.environ.get("YTDLP_COOKIES_BROWSER")
+        cookies_file = os.environ.get("YTDLP_COOKIES_FILE")
+        audio_result = extract_audio(url, cookies_from_browser=cookies_browser, cookies_file=cookies_file)
         if audio_result["status"] == "error":
             return {"status": "error", "error": f"Download failed: {audio_result['error']}"}
 
