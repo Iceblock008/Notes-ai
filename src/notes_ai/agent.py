@@ -9,7 +9,8 @@ import assemblyai as aai
 from groq import Groq
 from dotenv import load_dotenv
 
-load_dotenv()
+ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(ENV_FILE, override=True)
 
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 
@@ -27,13 +28,14 @@ def extract_audio(video_url: str, cookies_from_browser: str = None, cookies_file
         os.makedirs("audio", exist_ok=True)
 
         def run_ytdlp(args):
-            cmd = [sys.executable, "-m", "yt_dlp", "--no-update"]
+            cmd = [sys.executable, "-m", "yt_dlp", "--no-update",
+                   "--socket-timeout", "15", "--retries", "2", "--no-warnings"]
             if cookies_from_browser:
                 cmd += ["--cookies-from-browser", cookies_from_browser]
             elif cookies_file:
                 cmd += ["--cookies", cookies_file]
             cmd += args
-            return subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
         id_result = run_ytdlp(["--get-id", video_url])
         video_id = id_result.stdout.strip()
@@ -45,7 +47,7 @@ def extract_audio(video_url: str, cookies_from_browser: str = None, cookies_file
         run_ytdlp([
             "-x", "--audio-format", "mp3", "--audio-quality", "0",
             "-o", f"audio/{video_id}.%(ext)s", video_url
-        ], check=True)
+        ])
 
         if not os.path.exists(audio_path):
             files = sorted(Path("audio").glob("*.mp3"), key=os.path.getmtime, reverse=True)
@@ -56,7 +58,7 @@ def extract_audio(video_url: str, cookies_from_browser: str = None, cookies_file
         return {"audio_path": audio_path, "status": "success"}
 
     except subprocess.TimeoutExpired:
-        return {"status": "error", "error": "Download timed out (120s). Check network/cookies."}
+        return {"status": "error", "error": "Download timed out (300s). Your network to YouTube may be slow or throttled — try again or deploy to the cloud."}
     except subprocess.CalledProcessError as e:
         return {"status": "error", "error": f"yt-dlp failed: {e.stderr}"}
     except Exception as e:
@@ -141,7 +143,10 @@ Transcript:
         }
 
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        err = str(e)
+        if "401" in err or "Invalid API Key" in err:
+            return {"status": "error", "error": "GROQ_API_KEY is invalid or revoked. Regenerate it at https://console.groq.com/keys and update your .env file."}
+        return {"status": "error", "error": err}
 
 
 def save_output(title: str, content_type: str, output: str, url: str) -> dict:
