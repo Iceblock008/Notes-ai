@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -961,11 +961,31 @@ loadHistory();
 </html>"""
 
 
+from pathlib import Path
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return HTMLResponse(index_file.read_text(encoding="utf-8"))
     ip = get_local_ip()
     page = HTML_PAGE.replace("SERVER_URL", f"http://{ip}:{PORT}")
     return page
+
+
+@app.get("/{path:path}", include_in_schema=False)
+async def serve_static(path: str):
+    if path.startswith("api/") or path.startswith("ws/"):
+        raise HTTPException(status_code=404, detail="Not found")
+    if not (STATIC_DIR / "index.html").exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    candidate = STATIC_DIR / path
+    if path and candidate.exists() and candidate.is_file():
+        return FileResponse(candidate)
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 def run_server():
