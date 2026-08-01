@@ -7,10 +7,13 @@ import { ResultCard } from './components/ResultCard';
 import { ErrorCard } from './components/ErrorCard';
 import { HistorySidebar } from './components/HistorySidebar';
 import { NoteModal } from './components/NoteModal';
+import { Coach } from './components/Coach';
+import { SettingsPanel } from './components/SettingsPanel';
+import { SettingsProvider } from './context/SettingsContext';
 import { useTheme } from './context/ThemeContext';
 import { useToast } from './context/ToastContext';
 
-function App() {
+function AppContent() {
   const { theme, toggleTheme } = useTheme();
   const { addToast } = useToast();
   
@@ -20,12 +23,10 @@ function App() {
   const [result, setResult] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modalNote, setModalNote] = useState<Note | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
 
-  // Load history on mount
-  useEffect(() => {
-    api.connect();
-  }, []);
+  useEffect(() => { api.connect(); }, []);
 
   const handleProcess = useCallback(async (url: string) => {
     setProcessing(true);
@@ -62,16 +63,8 @@ function App() {
     }
   }, [addToast]);
 
-  const handleRetry = () => {
-    // URLInput will handle re-submission
-    setError(null);
-  };
-
-  const handleNoteSelect = (note: Note) => {
-    setResult(note);
-    setError(null);
-  };
-
+  const handleRetry = () => { setError(null); };
+  const handleNoteSelect = (note: Note) => { setResult(note); setError(null); };
   const handleOpenModal = (note: Note) => setModalNote(note);
   const handleCloseModal = () => setModalNote(null);
 
@@ -106,9 +99,7 @@ function App() {
       await api.deleteNote(result.id);
       setResult(null);
       addToast('Note deleted');
-    } catch {
-      addToast('Delete failed', 'error');
-    }
+    } catch { addToast('Delete failed', 'error'); }
   };
 
   const handleModalCopy = handleCopy;
@@ -116,11 +107,11 @@ function App() {
   const handleModalShare = handleShare;
   const handleModalDelete = handleDelete;
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (modalNote) handleCloseModal();
+        else if (settingsOpen) setSettingsOpen(false);
         else (document.getElementById('url') as HTMLInputElement)?.focus();
       } else if (e.key === '/' && !processing) {
         if (document.activeElement !== document.getElementById('url') && 
@@ -128,11 +119,14 @@ function App() {
           e.preventDefault();
           (document.getElementById('url') as HTMLInputElement)?.focus();
         }
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSettingsOpen(true);
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [modalNote, processing]);
+  }, [modalNote, settingsOpen, processing]);
 
   return (
     <div className="app">
@@ -152,15 +146,14 @@ function App() {
           </div>
         </div>
         <div className="top-actions">
+          <button className="icon-btn" onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings (⌘K)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1 1.51z"/></svg>
+          </button>
           <button className="icon-btn" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
             {theme === 'dark' ? (
-              <svg className="ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
-              </svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
             ) : (
-              <svg className="ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>
-              </svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
             )}
           </button>
         </div>
@@ -217,6 +210,8 @@ function App() {
         Server: <code>{window.location.origin}</code>
       </footer>
 
+      <Coach processing={processing} result={!!result} error={!!error} />
+      
       <NoteModal
         note={modalNote}
         onClose={handleCloseModal}
@@ -225,7 +220,19 @@ function App() {
         onShare={handleModalShare}
         onDelete={handleModalDelete}
       />
+      
+      {settingsOpen && (
+        <SettingsPanel onClose={() => setSettingsOpen(false)} />
+      )}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <SettingsProvider>
+      <AppContent />
+    </SettingsProvider>
   );
 }
 
