@@ -7,6 +7,14 @@ interface URLInputProps {
   loading: boolean;
 }
 
+const platforms = [
+  { name: 'YouTube', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', color: '#ff4b4b' },
+  { name: 'Instagram', url: 'https://www.instagram.com/reel/CHB0r5MDQhZ/', color: '#e1306c' },
+  { name: 'TikTok', url: 'https://www.tiktok.com/@scout2015/video/6718335390845097222', color: '#00f2ea' },
+  { name: 'X', url: 'https://x.com/i/status/1850000000000000000', color: '#1d9bf0' },
+  { name: 'Vimeo', url: 'https://vimeo.com/76979871', color: '#17b3e8' },
+];
+
 export function URLInput({ onSubmit, disabled, loading }: URLInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { addToast } = useToast();
@@ -31,12 +39,16 @@ export function URLInput({ onSubmit, disabled, loading }: URLInputProps) {
     }
   };
 
+  const handlePlatform = (url: string) => {
+    if (inputRef.current) {
+      inputRef.current.value = url;
+      inputRef.current.focus();
+      addToast('Sample URL filled — press Generate');
+    }
+  };
+
   return (
-    <form className="card" onSubmit={handleSubmit}>
-      <div className="card-head">
-        <h2>New Video</h2>
-        <span className="pill success">Ready</span>
-      </div>
+    <form className="card input-card" onSubmit={handleSubmit}>
       <label className="field-label" htmlFor="url">Video URL</label>
       <div className="url-row">
         <input
@@ -44,7 +56,7 @@ export function URLInput({ onSubmit, disabled, loading }: URLInputProps) {
           id="url"
           type="url"
           inputMode="url"
-          placeholder="https://youtube.com/watch?v=..."
+          placeholder="Paste any video link…"
           autoComplete="url"
           spellCheck={false}
           enterKeyHint="go"
@@ -56,7 +68,25 @@ export function URLInput({ onSubmit, disabled, loading }: URLInputProps) {
       </div>
       <div className="hint-row">
         <button type="button" className="text-btn" onClick={handlePaste} disabled={loading}>Paste</button>
-        <span className="hint">YouTube · Instagram · Twitter/X · TikTok · Vimeo</span>
+        <span className="hint">YouTube · Instagram · TikTok · X · Vimeo</span>
+      </div>
+      <div className="platform-row">
+        <span className="platform-hint">Or try a demo:</span>
+        <div className="platform-chips">
+          {platforms.map(p => (
+            <button
+              key={p.name}
+              type="button"
+              className="platform-chip"
+              onClick={() => handlePlatform(p.url)}
+              disabled={loading}
+              style={{ ['--chip-color' as any]: p.color }}
+            >
+              <span className="platform-dot" />
+              {p.name}
+            </button>
+          ))}
+        </div>
       </div>
     </form>
   );

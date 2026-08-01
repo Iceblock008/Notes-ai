@@ -136,6 +136,9 @@ function App() {
 
   return (
     <div className="app">
+      <div className="hero-bg" aria-hidden="true" />
+      <div className="grid-overlay" aria-hidden="true" />
+
       <header className="topbar">
         <div className="brand">
           <div className="logo" aria-hidden="true">
@@ -162,6 +165,21 @@ function App() {
           </button>
         </div>
       </header>
+
+      <section className="hero">
+        <span className="eyebrow">
+          <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 13, height: 13 }}><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+          AI-powered · Free · No sign-up
+        </span>
+        <h1>Turn any video into <span className="grad">smart notes</span></h1>
+        <p>Paste a link — YouTube, Instagram, TikTok, X or Vimeo — and get a clean, structured summary of the key points in seconds.</p>
+        <div className="tick-list">
+          <span className="tick"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Auto transcribe</span>
+          <span className="tick"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Key points summary</span>
+          <span className="tick"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Saved to history</span>
+          <span className="tick"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Copy or download</span>
+        </div>
+      </section>
 
       <main className="grid">
         <section className="col-main">
