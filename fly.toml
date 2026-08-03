@@ -6,6 +6,7 @@ primary_region = "iad"
 
 [env]
   PORT = "8080"
+  HOST = "0.0.0.0"
   PYTHONPATH = "/app/src"
 
 [[services]]

@@ -745,6 +745,50 @@ html[data-theme="light"] .url-row input { background: rgba(0,0,0,.03); }
 .error-card .btn { margin-left: auto; }
 
 /* ========================================
+   Batch Import Card (upload file of links)
+   ======================================== */
+.batch-card {
+  border-color: rgba(16,185,129,.25);
+}
+.batch-head {
+  margin-bottom: 14px;
+}
+.batch-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.batch-ico {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.batch-ico svg { width: 19px; height: 19px; }
+.batch-title h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.batch-title p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.45;
+}
+.batch-card .drop-zone {
+  margin-bottom: 12px;
+}
+.batch-card .memory-textarea {
+  margin-bottom: 12px;
+}
+
+/* ========================================
    Example Outputs
    ======================================== */
 .example-outputs { }
@@ -980,6 +1024,92 @@ html[data-theme="light"] .url-row input { background: rgba(0,0,0,.03); }
 .history-view-all:hover {
   background: rgba(16,185,129,.2);
 }
+
+/* Full-text search in the history panel */
+.history-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  margin-bottom: 14px;
+  transition: border-color .18s, box-shadow .18s;
+}
+.history-search:focus-within {
+  border-color: rgba(16,185,129,.6);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.history-search svg {
+  width: 15px; height: 15px;
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.history-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  padding: 10px 0;
+  font-size: 13px;
+}
+.history-search input::placeholder { color: var(--faint); }
+.history-search input::-webkit-search-cancel-button { display: none; }
+.history-search-clear {
+  background: none;
+  border: none;
+  color: var(--faint);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.history-search-clear:hover { color: var(--text); background: var(--surface-3); }
+.history-search-clear svg { width: 12px; height: 12px; }
+
+.history-result-count {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.history-card mark {
+  background: rgba(16,185,129,.25);
+  color: var(--accent-3);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+html[data-theme="light"] .history-card mark { color: #047857; }
+
+.history-snippet {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.history-snippet mark {
+  background: rgba(16,185,129,.25);
+  color: var(--accent-3);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+html[data-theme="light"] .history-snippet mark { color: #047857; }
 
 /* ========================================
    Modal

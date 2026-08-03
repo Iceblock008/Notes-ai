@@ -3,6 +3,7 @@ import type { Note } from './services/api';
 import { api } from './services/api';
 import { Sidebar } from './components/Sidebar';
 import { URLInput } from './components/URLInput';
+import { BatchImportCard } from './components/BatchImportCard';
 import { ProcessingSteps } from './components/ProcessingSteps';
 import { ResultCard } from './components/ResultCard';
 import { ErrorCard } from './components/ErrorCard';
@@ -11,11 +12,9 @@ import { NoteModal } from './components/NoteModal';
 import { SettingsPanel } from './components/SettingsPanel';
 import { MemoryPanel } from './components/MemoryPanel';
 import { SettingsProvider } from './context/SettingsContext';
-import { useTheme } from './context/ThemeContext';
 import { useToast } from './context/ToastContext';
 
 function AppContent() {
-  const { theme, toggleTheme } = useTheme();
   const { addToast } = useToast();
 
   const [activeNav, setActiveNav] = useState('new');
@@ -31,12 +30,17 @@ function AppContent() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
+  // Bumped whenever a note is generated/imported so the History panel refreshes.
+  const [historyVersion, setHistoryVersion] = useState(0);
 
-  useEffect(() => { api.connect(); }, []);
+  // Open the WebSocket for progress updates
+  useEffect(() => {
+    api.connect();
+  }, []);
 
   // Track processing progress from WebSocket
   useEffect(() => {
-    const unsub = api.onProgress?.((msg: any) => {
+    const unsub = api.on('progress', (msg: any) => {
       if (msg.step !== undefined) setProgressStep(msg.step);
       if (msg.status) setProgressStatus(msg.status);
       if (msg.message) setProgressMessage(msg.message);
@@ -74,6 +78,7 @@ function AppContent() {
       setProgressStatus('done');
       setProgressMessage('Done!');
       setProgressPercent(100);
+      setHistoryVersion(v => v + 1);
       addToast('Notes ready');
     } catch (err: any) {
       setError(err.message || 'Unknown error');
@@ -87,6 +92,14 @@ function AppContent() {
 
   const handleRetry = () => { setError(null); };
   const handleNoteSelect = (note: Note) => { setResult(note); setError(null); setActiveNav('new'); };
+  const handleImportDone = (n: number) => {
+    setHistoryVersion(v => v + 1);
+    addToast(`${n} video${n === 1 ? '' : 's'} added to memory`);
+  };
+
+  const scrollToBatch = () => {
+    document.getElementById('batch-import')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
   const handleOpenModal = (note: Note) => { setModalNote(note); setModalChat(false); };
   const handleAskAI = (note: Note) => { setModalNote(note); setModalChat(true); };
   const handleCloseModal = () => setModalNote(null);
@@ -167,7 +180,14 @@ function AppContent() {
         </section>
 
         {/* URL Input */}
-        <URLInput onSubmit={handleProcess} disabled={processing} loading={processing} />
+        <URLInput onSubmit={handleProcess} disabled={processing} loading={processing} onBatchImport={scrollToBatch} />
+
+        {/* Batch import — upload a file of video links (e.g. multiple reels) */}
+        {!processing && !result && (
+          <div id="batch-import">
+            <BatchImportCard onImportDone={handleImportDone} />
+          </div>
+        )}
 
         {/* Processing Steps */}
         <ProcessingSteps
@@ -198,8 +218,8 @@ function AppContent() {
       {/* Right history sidebar */}
       <HistorySidebar
         onSelectNote={handleNoteSelect}
-        onOpenModal={handleOpenModal}
         currentNoteId={result?.id}
+        refreshKey={historyVersion}
       />
 
       {/* Modals */}
@@ -217,7 +237,7 @@ function AppContent() {
       {memoryOpen && (
         <MemoryPanel
           onClose={() => setMemoryOpen(false)}
-          onImportDone={(n) => addToast(`${n} video${n === 1 ? '' : 's'} added to memory`)}
+          onImportDone={(n) => { setHistoryVersion(v => v + 1); addToast(`${n} video${n === 1 ? '' : 's'} added to memory`); }}
         />
       )}
 

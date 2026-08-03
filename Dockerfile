@@ -10,11 +10,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
-COPY .env.example .env
 
 RUN mkdir -p outputs audio data
 
 ENV PORT=8080
+ENV HOST=0.0.0.0
 ENV PYTHONPATH=/app/src
 
 EXPOSE 8080

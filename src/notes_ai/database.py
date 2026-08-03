@@ -5,7 +5,10 @@ from datetime import datetime
 from pathlib import Path
 from contextlib import contextmanager
 
-DB_PATH = Path("outputs") / "notes.db"
+# Anchor the database to the project root so notes always land in the same
+# place no matter where the server/CLI is started from.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DB_PATH = PROJECT_ROOT / "outputs" / "notes.db"
 
 @contextmanager
 def get_db():
@@ -48,12 +51,24 @@ def save_note(url: str, title: str, content_type: str, output: str, language: st
         return cursor.lastrowid
 
 
-def get_all_notes(limit: int = 100) -> list[dict]:
+def get_all_notes(limit: int = 100, q: str = "") -> list[dict]:
+    """List notes newest-first. When q is given, full-text search across
+    title, content type, note body, URL and language (case-insensitive)."""
     init_db()
     with get_db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM notes ORDER BY created_at DESC LIMIT ?", (limit,)
-        ).fetchall()
+        q = (q or "").strip()
+        if q:
+            pattern = f"%{q}%"
+            rows = conn.execute(
+                "SELECT * FROM notes WHERE title LIKE ? OR content_type LIKE ? "
+                "OR output LIKE ? OR url LIKE ? OR language LIKE ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (pattern, pattern, pattern, pattern, pattern, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM notes ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
         return [dict(row) for row in rows]
 
 

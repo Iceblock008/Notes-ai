@@ -14,6 +14,12 @@ from dotenv import load_dotenv
 ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(ENV_FILE, override=True)
 
+# Anchor all storage to the project root so notes are never lost in a
+# different folder when the app is launched from another directory.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+AUDIO_DIR = PROJECT_ROOT / "audio"
+OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+
 aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
 
 MODEL = "llama-3.3-70b-versatile"
@@ -27,7 +33,7 @@ def get_groq_client():
 
 def extract_audio(video_url: str, cookies_from_browser: str = None, cookies_file: str = None) -> dict:
     try:
-        os.makedirs("audio", exist_ok=True)
+        AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
         def run_ytdlp(args):
             cmd = [sys.executable, "-m", "yt_dlp", "--no-update",
@@ -44,15 +50,15 @@ def extract_audio(video_url: str, cookies_from_browser: str = None, cookies_file
         if not video_id:
             return {"status": "error", "error": f"Could not extract video ID. {id_result.stderr}"}
 
-        audio_path = f"audio/{video_id}.mp3"
+        audio_path = str(AUDIO_DIR / f"{video_id}.mp3")
 
         run_ytdlp([
             "-x", "--audio-format", "mp3", "--audio-quality", "0",
-            "-o", f"audio/{video_id}.%(ext)s", video_url
+            "-o", str(AUDIO_DIR / f"{video_id}.%(ext)s"), video_url
         ])
 
         if not os.path.exists(audio_path):
-            files = sorted(Path("audio").glob("*.mp3"), key=os.path.getmtime, reverse=True)
+            files = sorted(AUDIO_DIR.glob("*.mp3"), key=os.path.getmtime, reverse=True)
             if not files:
                 return {"status": "error", "error": "Audio file not found after download."}
             audio_path = str(files[0])
@@ -290,11 +296,11 @@ def chat_with_notes(notes: str, messages: list[dict], max_context_chars: int = 1
 
 def save_output(title: str, content_type: str, output: str, url: str) -> dict:
     try:
-        os.makedirs("outputs", exist_ok=True)
+        OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_type = content_type.replace(" ", "_").replace("/", "_")
-        base_name = f"outputs/{timestamp}_{safe_type}"
+        base_name = str(OUTPUTS_DIR / f"{timestamp}_{safe_type}")
 
         record = {
             "url": url,
@@ -323,18 +329,20 @@ def save_output(title: str, content_type: str, output: str, url: str) -> dict:
         return {"status": "error", "error": str(e)}
 
 
-def run_agent(url: str) -> str:
+def process_video_sync(url: str, save: bool = True) -> dict:
+    """Run the full pipeline synchronously and return a structured result dict
+    that includes the saved note id, so callers can respond without re-querying."""
     cookies_browser = os.environ.get("YTDLP_COOKIES_BROWSER")
     cookies_file = os.environ.get("YTDLP_COOKIES_FILE")
     print("  [1/4] Downloading audio...")
     audio_result = extract_audio(url, cookies_from_browser=cookies_browser, cookies_file=cookies_file)
     if audio_result["status"] == "error":
-        return f"[ERROR] Download failed: {audio_result['error']}"
+        return {"status": "error", "error": f"Download failed: {audio_result['error']}"}
 
     print("  [2/4] Transcribing...")
     transcript_result = transcribe_audio(audio_result["audio_path"])
     if transcript_result["status"] == "error":
-        return f"[ERROR] Transcription failed: {transcript_result['error']}"
+        return {"status": "error", "error": f"Transcription failed: {transcript_result['error']}"}
 
     print("  [3/4] Generating notes...")
     notes_result = generate_notes(
@@ -343,19 +351,54 @@ def run_agent(url: str) -> str:
         url=url
     )
     if notes_result["status"] == "error":
-        return f"[ERROR] Note generation failed: {notes_result['error']}"
+        return {"status": "error", "error": f"Note generation failed: {notes_result['error']}"}
 
     print("  [4/4] Saving...")
-    save_result = save_output(
-        title=notes_result["title"],
-        content_type=notes_result["content_type"],
-        output=notes_result["notes"],
-        url=url
-    )
+    # Persist every generated note: a .txt/.json copy in outputs/ AND a row in
+    # the history database so it shows up in History, Memory chat and search.
+    note_id = None
+    txt_file = None
+    if save:
+        save_result = save_output(
+            title=notes_result["title"],
+            content_type=notes_result["content_type"],
+            output=notes_result["notes"],
+            url=url
+        )
+        if save_result["status"] == "saved":
+            txt_file = save_result["txt_file"]
+        try:
+            from notes_ai.database import save_note
+            note_id = save_note(
+                url=url,
+                title=notes_result["title"],
+                content_type=notes_result["content_type"],
+                output=notes_result["notes"],
+                language=transcript_result.get("detected_language", "en"),
+            )
+        except Exception as e:
+            return {"status": "error", "error": f"Notes were generated but could not be saved to memory: {e}"}
 
-    output = notes_result["notes"]
-    if save_result["status"] == "saved":
+    return {
+        "status": "success",
+        "note_id": note_id,
+        "title": notes_result["title"],
+        "content_type": notes_result["content_type"],
+        "notes": notes_result["notes"],
+        "language": transcript_result.get("detected_language", "en"),
+        "txt_file": txt_file,
+    }
+
+
+def run_agent(url: str, save: bool = True) -> str:
+    """Full pipeline; returns the notes as a string (or an [ERROR] line)."""
+    result = process_video_sync(url, save=save)
+    if result["status"] == "error":
+        return f"[ERROR] {result['error']}"
+
+    output = result["notes"]
+    if result.get("txt_file"):
         output += f"\n\n{'-' * 29}\n"
-        output += f"Saved to: {save_result['txt_file']}"
+        output += f"Saved to: {result['txt_file']}"
 
     return output

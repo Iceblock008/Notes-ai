@@ -1,6 +1,5 @@
 import os
 import asyncio
-import socket
 import json
 from datetime import datetime
 from typing import Optional
@@ -16,7 +15,7 @@ from notes_ai.agent import (
     transcribe_audio,
     generate_notes,
     save_output,
-    run_agent,
+    process_video_sync,
     chat_with_notes,
     chat_with_memory,
 )
@@ -30,6 +29,10 @@ from notes_ai.database import (
 )
 
 PORT = int(os.environ.get("PORT", 8080))
+# Private by default: bind to localhost only. Set HOST=0.0.0.0 to expose
+# to your LAN, or a public host on a server (only if you really want to).
+HOST = os.environ.get("HOST", "127.0.0.1")
+
 
 app = FastAPI(title="Video Notes AI", version="1.0.0")
 
@@ -114,30 +117,6 @@ class MemoryChatRequest(BaseModel):
 
 class ImportRequest(BaseModel):
     urls: list[str]
-
-
-def get_local_ip() -> str:
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(0)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return "127.0.0.1"
-
-
-def parse_notes_output(notes: str) -> tuple[str, str]:
-    content_type = "general"
-    title = "Video Notes"
-    for line in notes.strip().split("\n")[:5]:
-        line_lower = line.lower().strip()
-        if line_lower.startswith("type:"):
-            content_type = line.split(":", 1)[1].strip()
-        elif line_lower.startswith("title:"):
-            title = line.split(":", 1)[1].strip()
-    return content_type, title
 
 
 async def process_video_with_progress(url: str, client_id: str) -> dict:
@@ -309,34 +288,27 @@ async def api_process(request: ProcessRequest):
         result = await process_video_with_progress(url, request.client_id)
         return JSONResponse(result)
 
-    result = run_agent(url)
-    if result.startswith("[ERROR]"):
-        raise HTTPException(status_code=500, detail=result[7:])
-
-    content_type, title = parse_notes_output(result)
-    save_result = save_output(title=title, content_type=content_type, output=result, url=url)
-
-    detected_lang = "en"
-    for line in result.split("\n")[:3]:
-        if "language" in line.lower():
-            detected_lang = line.split(":")[-1].strip().strip("'\"")
-
-    note_id = save_note(url, title, content_type, result, detected_lang)
+    # The sync pipeline saves the note to outputs/ AND the history database,
+    # and returns the exact saved note id (no re-query needed).
+    result = process_video_sync(url, save=True)
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result["error"])
 
     return JSONResponse({
         "status": "success",
-        "id": note_id,
-        "title": title,
-        "content_type": content_type,
-        "notes": result,
-        "language": detected_lang,
-        "saved_file": save_result.get("txt_file") if save_result["status"] == "saved" else None
+        "id": result["note_id"],
+        "title": result["title"],
+        "content_type": result["content_type"],
+        "notes": result["notes"],
+        "language": result["language"],
+        "saved_file": result.get("txt_file"),
     })
 
 
 @app.get("/api/history")
-async def api_history(limit: int = 50):
-    notes = get_all_notes(limit)
+async def api_history(limit: int = 50, q: str = ""):
+    """List history, optionally filtered by a full-text keyword search (q)."""
+    notes = get_all_notes(limit, q)
     return JSONResponse({"notes": notes})
 
 
@@ -1091,8 +1063,7 @@ async def index():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return HTMLResponse(index_file.read_text(encoding="utf-8"))
-    ip = get_local_ip()
-    page = HTML_PAGE.replace("SERVER_URL", f"http://{ip}:{PORT}")
+    page = HTML_PAGE.replace("SERVER_URL", f"http://127.0.0.1:{PORT}")
     return page
 
 
@@ -1109,22 +1080,35 @@ async def serve_static(path: str):
 
 
 def run_server():
-    ip = get_local_ip()
     print()
     print("=" * 50)
-    print("  Video Notes Web Server")
+    print("  Video Notes Web Server  (personal)")
     print("=" * 50)
     print()
     print(f"  Local:    http://127.0.0.1:{PORT}")
-    print(f"  Network:  http://{ip}:{PORT}")
     print()
-    print("  Open the Network URL on your phone")
-    print("  to paste video URLs and get notes.")
+    if HOST != "127.0.0.1":
+        print(f"  Listening on {HOST} — exposed beyond this machine!")
+    else:
+        print("  Private — listening on localhost only (not exposed to your network).")
     print()
     print("  Press Ctrl+C to stop.")
     print("=" * 50)
     print()
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")
+    if os.environ.get("VN_OPEN_BROWSER") == "1":
+        import threading
+        import webbrowser
+
+        def _open_browser():
+            import time
+            time.sleep(1.5)
+            try:
+                webbrowser.open(f"http://127.0.0.1:{PORT}")
+            except Exception:
+                pass
+
+        threading.Thread(target=_open_browser, daemon=True).start()
+    uvicorn.run(app, host=HOST, port=PORT, log_level="info")
 
 
 if __name__ == "__main__":

@@ -66,6 +66,12 @@ class ApiService {
     this.clientId = 'client_' + Math.random().toString(36).substr(2, 9);
   }
 
+  private authHeaders(json = false): Record<string, string> {
+    const h: Record<string, string> = {};
+    if (json) h['Content-Type'] = 'application/json';
+    return h;
+  }
+
   connect() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     this.ws = new WebSocket(`${protocol}//${window.location.host}/ws/${this.clientId}`);
@@ -109,25 +115,26 @@ class ApiService {
 
     const res = await fetch(`${API_BASE}/api/process`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders(true),
       body: JSON.stringify({ url, client_id: this.clientId })
     });
     return res.json();
   }
 
-  async getHistory(limit = 50): Promise<Note[]> {
-    const res = await fetch(`${API_BASE}/api/history?limit=${limit}`);
+  async getHistory(limit = 50, q = ''): Promise<Note[]> {
+    const qs = q ? `&q=${encodeURIComponent(q)}` : '';
+    const res = await fetch(`${API_BASE}/api/history?limit=${limit}${qs}`, { headers: this.authHeaders() });
     const data: HistoryResponse = await res.json();
     return data.notes || [];
   }
 
   async deleteNote(id: number): Promise<boolean> {
-    const res = await fetch(`${API_BASE}/api/history/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${API_BASE}/api/history/${id}`, { method: 'DELETE', headers: this.authHeaders() });
     return res.ok;
   }
 
   async downloadNote(id: number): Promise<Blob> {
-    const res = await fetch(`${API_BASE}/api/history/${id}/download`);
+    const res = await fetch(`${API_BASE}/api/history/${id}/download`, { headers: this.authHeaders() });
     return res.blob();
   }
 
@@ -160,7 +167,7 @@ class ApiService {
   }
 
   async getMemoryStats(): Promise<MemoryStats> {
-    const res = await fetch(`${API_BASE}/api/memory`);
+    const res = await fetch(`${API_BASE}/api/memory`, { headers: this.authHeaders() });
     const data = await res.json();
     return { count: data.count || 0, total_words: data.total_words || 0, types: data.types || {} };
   }
@@ -168,7 +175,7 @@ class ApiService {
   async chatWithMemory(messages: ChatMessage[]): Promise<ChatResponse> {
     const res = await fetch(`${API_BASE}/api/memory/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders(true),
       body: JSON.stringify({ messages })
     });
     if (!res.ok) {
@@ -185,7 +192,7 @@ class ApiService {
   async chatWithNotes(noteId: number, messages: ChatMessage[]): Promise<ChatResponse> {
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.authHeaders(true),
       body: JSON.stringify({ note_id: noteId, messages })
     });
     if (res.status === 404) return { status: 'error', error: 'Note not found' };

@@ -2,9 +2,12 @@ import os
 import json
 from pathlib import Path
 
+# Match where agent.py stores notes (project-root/outputs), regardless of CWD.
+OUTPUTS_DIR = Path(__file__).resolve().parent / "outputs"
+
 
 def browse():
-    outputs_dir = Path("outputs")
+    outputs_dir = OUTPUTS_DIR
 
     if not outputs_dir.exists() or not list(outputs_dir.glob("*.json")):
         print("\n📭  No saved outputs yet. Run run.py first.\n")

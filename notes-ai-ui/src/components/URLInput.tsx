@@ -5,6 +5,7 @@ interface URLInputProps {
   onSubmit: (url: string) => void;
   disabled: boolean;
   loading: boolean;
+  onBatchImport?: () => void;
 }
 
 const platforms = [
@@ -15,7 +16,7 @@ const platforms = [
   { name: 'Vimeo', url: 'https://vimeo.com/76979871', color: '#17b3e8' },
 ];
 
-export function URLInput({ onSubmit, disabled, loading }: URLInputProps) {
+export function URLInput({ onSubmit, disabled, loading, onBatchImport }: URLInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { addToast } = useToast();
 
@@ -67,7 +68,15 @@ export function URLInput({ onSubmit, disabled, loading }: URLInputProps) {
         </button>
       </div>
       <div className="hint-row">
-        <button type="button" className="text-btn" onClick={handlePaste} disabled={loading}>Paste</button>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+          <button type="button" className="text-btn" onClick={handlePaste} disabled={loading}>Paste</button>
+          {onBatchImport && (
+            <button type="button" className="text-btn" onClick={onBatchImport} disabled={loading} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 12, height: 12 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+              Upload file of links
+            </button>
+          )}
+        </div>
         <span className="hint">YouTube · Instagram · TikTok · X · Vimeo</span>
       </div>
       <div className="platform-row">

@@ -29,10 +29,10 @@ def process(url, no_save):
     click.echo()
 
     if no_save:
-        click.echo("  Note: output will not be saved to disk")
+        click.echo("  Note: output will not be saved to disk or memory")
         click.echo()
 
-    result = run_agent(url)
+    result = run_agent(url, save=not no_save)
 
     click.echo()
     if result.startswith("[ERROR]"):
