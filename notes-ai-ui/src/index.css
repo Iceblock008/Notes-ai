@@ -76,18 +76,6 @@ a { color: inherit; }
   max-width: 1440px;
   margin: 0 auto;
 }
-@media (max-width: 1200px) {
-  .app-layout { grid-template-columns: 200px 1fr 300px; }
-}
-@media (max-width: 1000px) {
-  .app-layout {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 1000px) {
-  .sidebar, .history-panel { display: none; }
-}
-
 /* ========================================
    Sidebar (Left)
    ======================================== */
@@ -1438,6 +1426,23 @@ html[data-theme="light"] .url-row input { background: rgba(0,0,0,.03); }
 .progress-timer .timer {
   color: var(--accent-1);
   font-weight: 650;
+}
+
+/* ========================================
+   Responsive layout (must come last so it overrides base rules)
+   ======================================== */
+@media (max-width: 1200px) {
+  .app-layout { grid-template-columns: 200px 1fr 300px; }
+}
+@media (max-width: 1000px) {
+  .app-layout { grid-template-columns: 1fr; }
+  .sidebar, .history-panel { display: none; }
+}
+@media (max-width: 640px) {
+  .main-content { padding: 16px; }
+  .example-grid { grid-template-columns: 1fr; }
+  .url-row { flex-direction: column; }
+  .url-row .btn { width: 100%; }
 }
 
 /* ========================================

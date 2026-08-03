@@ -4,7 +4,6 @@ import { api } from './services/api';
 import { Sidebar } from './components/Sidebar';
 import { URLInput } from './components/URLInput';
 import { ProcessingSteps } from './components/ProcessingSteps';
-import { ExampleOutputs } from './components/ExampleOutputs';
 import { ResultCard } from './components/ResultCard';
 import { ErrorCard } from './components/ErrorCard';
 import { HistorySidebar } from './components/HistorySidebar';
@@ -161,16 +160,6 @@ function AppContent() {
 
       {/* Center main content */}
       <main className="main-content">
-        {/* How it works button */}
-        <div className="main-top-bar">
-          <button className="how-it-works-btn" onClick={() => addToast('Paste a video URL and click Go to generate smart notes!')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:16,height:16}}>
-              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            How it works
-          </button>
-        </div>
-
         {/* Hero section */}
         <section className="main-hero">
           <h1>Create Notes from <span className="hero-accent">Any Video</span></h1>
@@ -204,11 +193,6 @@ function AppContent() {
 
         {/* Error Card */}
         {error && <ErrorCard message={error} onRetry={handleRetry} />}
-
-        {/* Example Outputs */}
-        {!processing && !result && (
-          <ExampleOutputs onSelectNote={(note) => { setResult(note); }} />
-        )}
       </main>
 
       {/* Right history sidebar */}
