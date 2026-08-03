@@ -9,9 +9,10 @@ interface ResultCardProps {
   onShare: () => void;
   onDelete: () => void;
   onOpenModal: () => void;
+  onAskAI: () => void;
 }
 
-export function ResultCard({ note, onCopy, onDownload, onShare, onDelete, onOpenModal }: ResultCardProps) {
+export function ResultCard({ note, onCopy, onDownload, onShare, onDelete, onOpenModal, onAskAI }: ResultCardProps) {
   const formatDate = (iso: string) => {
     try {
       const d = new Date(iso);
@@ -50,6 +51,9 @@ export function ResultCard({ note, onCopy, onDownload, onShare, onDelete, onOpen
           </a>
         </div>
         <div className="result-actions">
+          <button className="icon-btn chat-launch-btn" onClick={onAskAI} title="Ask AI about these notes" aria-label="Ask AI about these notes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </button>
           <button className="icon-btn" onClick={onCopy} title="Copy" aria-label="Copy notes">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           </button>

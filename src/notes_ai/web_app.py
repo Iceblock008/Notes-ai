@@ -1,4 +1,5 @@
 import os
+import asyncio
 import socket
 import json
 from datetime import datetime
@@ -16,6 +17,8 @@ from notes_ai.agent import (
     generate_notes,
     save_output,
     run_agent,
+    chat_with_notes,
+    chat_with_memory,
 )
 from notes_ai.database import (
     init_db,
@@ -78,6 +81,14 @@ class ConnectionManager:
             except Exception:
                 self.disconnect(client_id)
 
+    async def send_json(self, client_id: str, payload: dict):
+        ws = self.active_connections.get(client_id)
+        if ws:
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                self.disconnect(client_id)
+
 
 manager = ConnectionManager()
 
@@ -90,6 +101,19 @@ class ProcessRequest(BaseModel):
 class UpdateRequest(BaseModel):
     title: Optional[str] = None
     output: Optional[str] = None
+
+
+class ChatRequest(BaseModel):
+    note_id: int
+    messages: list[dict]
+
+
+class MemoryChatRequest(BaseModel):
+    messages: list[dict]
+
+
+class ImportRequest(BaseModel):
+    urls: list[str]
 
 
 def get_local_ip() -> str:
@@ -117,22 +141,27 @@ def parse_notes_output(notes: str) -> tuple[str, str]:
 
 
 async def process_video_with_progress(url: str, client_id: str) -> dict:
+    """Run the full pipeline off the event loop so the server stays responsive."""
     try:
         await manager.send_progress(client_id, 1, "Downloading audio...", "active")
         cookies_browser = os.environ.get("YTDLP_COOKIES_BROWSER")
         cookies_file = os.environ.get("YTDLP_COOKIES_FILE")
-        audio_result = extract_audio(url, cookies_from_browser=cookies_browser, cookies_file=cookies_file)
+        audio_result = await asyncio.to_thread(
+            extract_audio, url,
+            cookies_from_browser=cookies_browser, cookies_file=cookies_file
+        )
         if audio_result["status"] == "error":
             return {"status": "error", "error": f"Download failed: {audio_result['error']}"}
 
         await manager.send_progress(client_id, 2, "Transcribing audio...", "active")
-        transcript_result = transcribe_audio(audio_result["audio_path"])
+        transcript_result = await asyncio.to_thread(transcribe_audio, audio_result["audio_path"])
         if transcript_result["status"] == "error":
             return {"status": "error", "error": f"Transcription failed: {transcript_result['error']}"}
 
         await manager.send_progress(client_id, 3, "Generating smart notes...", "active")
         detected_lang = transcript_result.get("detected_language", "en")
-        notes_result = generate_notes(
+        notes_result = await asyncio.to_thread(
+            generate_notes,
             transcript=transcript_result["transcript"],
             detected_language=detected_lang,
             url=url
@@ -141,14 +170,16 @@ async def process_video_with_progress(url: str, client_id: str) -> dict:
             return {"status": "error", "error": f"Note generation failed: {notes_result['error']}"}
 
         await manager.send_progress(client_id, 4, "Saving notes...", "active")
-        save_result = save_output(
+        save_result = await asyncio.to_thread(
+            save_output,
             title=notes_result["title"],
             content_type=notes_result["content_type"],
             output=notes_result["notes"],
             url=url
         )
 
-        note_id = save_note(
+        note_id = await asyncio.to_thread(
+            save_note,
             url=url,
             title=notes_result["title"],
             content_type=notes_result["content_type"],
@@ -172,6 +203,39 @@ async def process_video_with_progress(url: str, client_id: str) -> dict:
         return {"status": "error", "error": str(e)}
 
 
+async def import_videos_with_progress(urls: list[str], client_id: str) -> None:
+    total = len(urls)
+    for i, url in enumerate(urls):
+        url = url.strip()
+        if not url:
+            continue
+        await manager.send_json(client_id, {
+            "type": "import_status",
+            "video_index": i,
+            "video_total": total,
+            "url": url,
+            "status": "processing",
+            "message": "Starting…",
+        })
+        result = await process_video_with_progress(url, client_id)
+        ok = result.get("status") == "success"
+        await manager.send_json(client_id, {
+            "type": "import_status",
+            "video_index": i,
+            "video_total": total,
+            "url": url,
+            "status": "done" if ok else "error",
+            "title": result.get("title"),
+            "error": result.get("error"),
+            "message": (result.get("title") or "Done") if ok else (result.get("error") or "Failed"),
+        })
+    await manager.send_json(client_id, {
+        "type": "import_done",
+        "total": total,
+        "results": [],
+    })
+
+
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await manager.connect(websocket, client_id)
@@ -186,8 +250,53 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     await manager.send_result(client_id, result)
                 else:
                     await manager.send_error(client_id, "No URL provided")
+            elif msg.get("type") == "import":
+                urls = [u for u in (msg.get("urls") or []) if u and u.strip()]
+                if urls:
+                    await import_videos_with_progress(urls, client_id)
+                else:
+                    await manager.send_error(client_id, "No URLs provided")
     except WebSocketDisconnect:
         manager.disconnect(client_id)
+
+
+@app.post("/api/import")
+async def api_import(request: ImportRequest):
+    """HTTP fallback: returns an import job summary. Preferred path is the WebSocket."""
+    urls = [u.strip() for u in request.urls if u and u.strip()]
+    if not urls:
+        raise HTTPException(status_code=400, detail="No URLs provided")
+    return JSONResponse({"status": "accepted", "queued": len(urls)})
+
+
+@app.get("/api/memory")
+async def api_memory_stats():
+    notes = get_all_notes(limit=500)
+    type_counts: dict[str, int] = {}
+    total_words = 0
+    for n in notes:
+        ctype = n.get("content_type") or "general"
+        type_counts[ctype] = type_counts.get(ctype, 0) + 1
+        total_words += len((n.get("output") or "").split())
+    return JSONResponse({
+        "count": len(notes),
+        "total_words": total_words,
+        "types": type_counts,
+    })
+
+
+@app.post("/api/memory/chat")
+async def api_memory_chat(request: MemoryChatRequest):
+    notes = get_all_notes(limit=500)
+    query = ""
+    for m in reversed(request.messages):
+        if m.get("role") == "user":
+            query = m.get("content", "") or ""
+            break
+    result = chat_with_memory(query, request.messages, notes)
+    if result["status"] == "error":
+        return JSONResponse({"status": "error", "error": result["error"]}, status_code=500)
+    return JSONResponse({"status": "success", "reply": result["reply"]})
 
 
 @app.post("/api/process")
@@ -251,6 +360,17 @@ async def api_update_note(note_id: int, request: UpdateRequest):
     if update_note(note_id, title=request.title, output=request.output):
         return JSONResponse({"status": "updated"})
     raise HTTPException(status_code=404, detail="Note not found")
+
+
+@app.post("/api/chat")
+async def api_chat(request: ChatRequest):
+    note = get_note(request.note_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    result = chat_with_notes(note["output"], request.messages)
+    if result["status"] == "error":
+        return JSONResponse({"status": "error", "error": result["error"]}, status_code=500)
+    return JSONResponse({"status": "success", "reply": result["reply"]})
 
 
 @app.get("/api/history/{note_id}/download")

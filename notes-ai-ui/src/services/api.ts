@@ -30,6 +30,33 @@ export interface HistoryResponse {
   notes: Note[];
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatResponse {
+  status: 'success' | 'error';
+  reply?: string;
+  error?: string;
+}
+
+export interface ImportStatus {
+  video_index: number;
+  video_total: number;
+  url: string;
+  status: 'processing' | 'done' | 'error';
+  title?: string;
+  error?: string;
+  message?: string;
+}
+
+export interface MemoryStats {
+  count: number;
+  total_words: number;
+  types: Record<string, number>;
+}
+
 class ApiService {
   private ws: WebSocket | null = null;
   private clientId: string;
@@ -102,6 +129,75 @@ class ApiService {
   async downloadNote(id: number): Promise<Blob> {
     const res = await fetch(`${API_BASE}/api/history/${id}/download`);
     return res.blob();
+  }
+
+  importVideos(urls: string[], onStatus: (s: ImportStatus) => void): Promise<ImportStatus[]> {
+    const results: ImportStatus[] = [];
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('Not connected to server'));
+        return;
+      }
+      const offStatus = this.on('import_status', (data) => {
+        const s = data as ImportStatus;
+        results.push(s);
+        onStatus(s);
+      });
+      const offDone = this.on('import_done', () => {
+        offStatus();
+        offDone();
+        offError();
+        resolve(results);
+      });
+      const offError = this.on('error', (data) => {
+        offStatus();
+        offDone();
+        offError();
+        reject(new Error(data.error || 'Import failed'));
+      });
+      this.ws!.send(JSON.stringify({ type: 'import', urls }));
+    });
+  }
+
+  async getMemoryStats(): Promise<MemoryStats> {
+    const res = await fetch(`${API_BASE}/api/memory`);
+    const data = await res.json();
+    return { count: data.count || 0, total_words: data.total_words || 0, types: data.types || {} };
+  }
+
+  async chatWithMemory(messages: ChatMessage[]): Promise<ChatResponse> {
+    const res = await fetch(`${API_BASE}/api/memory/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages })
+    });
+    if (!res.ok) {
+      try {
+        const data = await res.json();
+        return { status: 'error', error: data.error || `Request failed (${res.status})` };
+      } catch {
+        return { status: 'error', error: `Request failed (${res.status})` };
+      }
+    }
+    return res.json();
+  }
+
+  async chatWithNotes(noteId: number, messages: ChatMessage[]): Promise<ChatResponse> {
+    const res = await fetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note_id: noteId, messages })
+    });
+    if (res.status === 404) return { status: 'error', error: 'Note not found' };
+    if (!res.ok) {
+      try {
+        const data = await res.json();
+        return { status: 'error', error: data.error || `Request failed (${res.status})` };
+      } catch {
+        return { status: 'error', error: `Request failed (${res.status})` };
+      }
+    }
+    return res.json();
   }
 
   disconnect() {
